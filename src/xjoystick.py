@@ -1,103 +1,86 @@
 #!/usr/bin/env python
+
 import rospy
 from vugc1_control.msg import drive_param
-from sensor_msgs.msg import Joy
-
-max_speed = 100
-max_angle = 100
-lmt_speed = 0
-lmt_angle = 0
-cur_speed = 0
-cur_angle = 0
-
-started = False
+from vugc1_control import gamecontroller
 
 
-def offhook():
-    offpub = rospy.Publisher('vugc1_control_drive_parameters', drive_param, queue_size=10)
-    message = drive_param()
-    message.velocity = 0
-    message.angle = 0
-    offpub.publish(message)
+class Xjoystick(gamecontroller.Observer):
+    def __init__(self):
+        gamecontroller.Observer.__init__(self)
+        self.started = False
+        self.max_speed = 100
+        self.max_angle = 100
+        self.lmt_speed = 0
+        self.lmt_angle = 0
+        self.cur_speed = 0
+        self.cur_angle = 0
+        self.pub = rospy.Publisher('vugc1_control_drive_parameters', drive_param, queue_size=10)
 
+    def offhook(self):
+        message = drive_param()
+        message.velocity = 0
+        message.angle = 0
+        self.pub.publish(message)
 
-def range_map(x, in_min, in_max, out_min, out_max):
-    out = (x - in_min) * (out_max - out_min) // (in_max - in_min) + out_min
-    return max(min(out, out_max), out_min)
+    def range_map(self, x, in_min, in_max, out_min, out_max):
+        out = (x - in_min) * (out_max - out_min) // (in_max - in_min) + out_min
+        return max(min(out, out_max), out_min)
 
+    def update(self, xcontroller):
+        rospy.on_shutdown(self.offhook)
+        if xcontroller.power_button == 1:
+            rospy.signal_shutdown("X pressed")
 
-def callback(data):
-    
-    rospy.on_shutdown(offhook)
-    global started
-    global max_speed
-    global max_angle
-    global lmt_speed
-    global lmt_angle
-    global cur_speed
-    global cur_angle
-    
-    lefttrg = data.axes[2]
-    ritetrg = data.axes[5]
-    leftbump = data.buttons[4]
-    ritebump = data.buttons[5]
-    dpadx = data.axes[6]
-    dpady = data.axes[7]
-    leftanlgx = data.axes[0]
-    leftanlgy = data.axes[1]
-    start = data.buttons[0]
-    bigX = data.buttons[8]
+        if xcontroller.start_button == 1:
+            self.started = not self.started
+        print ("ENABLED" if self.started else "DISABLED")
 
-    if bigX == 1:
-        rospy.signal_shutdown("X pressed") 
+        if self.started:
+            self.lmt_speed += xcontroller.dpad_y * 2
+            self.lmt_angle += -1 * xcontroller.dpad_x * 5
 
-    if start == 1:
-        started = not started
-	print ("ENABLED" if started else "DISABLED")
-            
-    if started:
-        lmt_speed += dpady*2
-        lmt_angle += -1*dpadx*5
+            self.cur_angle = self.range_map(xcontroller.left_analog_x, 1, -1, -1 * self.lmt_angle, self.lmt_angle)
 
-        cur_angle = range_map(leftanlgx, 1, -1, -1*lmt_angle, lmt_angle)
+            if xcontroller.left_trigger == 1 or xcontroller.right_trigger == 1:
+                if xcontroller.left_trigger != 1:
+                    self.cur_speed = self.range_map(xcontroller.left_trigger, -1, 1, -1 * self.lmt_speed, 0)
 
-        if lefttrg == 1 or ritetrg == 1:
-            if lefttrg != 1:
-                cur_speed = range_map(lefttrg, -1, 1, -1*lmt_speed, 0)
+                elif xcontroller.right_trigger != 1:
+                    self.cur_speed = self.range_map(xcontroller.right_trigger, 1, -1, 0, self.lmt_speed)
 
-            elif ritetrg != 1:
-                cur_speed = range_map(ritetrg, 1, -1, 0, lmt_speed)
+                else:
+                    self.cur_speed = 0
 
-            else:
-                cur_speed = 0
+            if xcontroller.left_trigger != 1 and xcontroller.right_trigger != 1:
+                self.cur_speed = 0
 
-        if lefttrg != 1 and ritetrg != 1:
-            cur_speed = 0
+            if xcontroller.left_bumper == 1:
+                self.cur_angle = 0
+            if xcontroller.right_bumper == 1:
+                self.cur_speed = 0
+        else:
+            self.cur_speed = 0
+            self.cur_angle = 0
 
-        if leftbump == 1:
-            cur_angle = 0
-        if ritebump == 1:
-            cur_speed = 0
-    else:
-	cur_speed = 0
-	cur_angle = 0
+        msg = drive_param()
+        msg.velocity = self.cur_speed
+        msg.angle = self.cur_angle
 
-    msg = drive_param()
-    msg.velocity = cur_speed
-    msg.angle = cur_angle
+        print ('Limits: speed: %f, angle: %f' % (self.lmt_speed, self.lmt_angle))
+        print ('Current: speed: %f, angle: %f' % (self.cur_speed, self.cur_angle))
 
-    print ('Limits: speed: %f, angle: %f' % (lmt_speed, lmt_angle))
-    print ('Current: speed: %f, angle: %f' % (cur_speed, cur_angle))
-
-    pub.publish(msg)
+        self.pub.publish(msg)
 
 
 def main():
     print("Joystick Controller Started")
-    global pub
-    pub = rospy.Publisher('vugc1_control_drive_parameters', drive_param, queue_size=10)
     rospy.init_node('xjoystick', anonymous=True)
-    rospy.Subscriber("joy", Joy, callback)
+
+    xboxcontroller = gamecontroller.Controller()
+    interpreter = Xjoystick()
+    xboxcontroller.attach(interpreter)
+
     rospy.spin()
 
 

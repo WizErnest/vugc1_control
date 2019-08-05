@@ -74,7 +74,7 @@ if __name__ == '__main__':
     print ("Steering control started")
     rospy.init_node('steering_control', anonymous=True)
     rospy.Subscriber('encoder', encoder_values, check_encoder)
-    rospy.Subscriber('control_drive_parameters', drive_param, set_setpoint)
+    rospy.Subscriber('vugc1_control_drive_parameters', drive_param, set_setpoint)
 
     # correct_steering()
     rospy.spin()
