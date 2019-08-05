@@ -1,0 +1,13 @@
+<launch>
+
+    <node name="steering_controller" pkg="vugc1_control" type="steering.py">
+        <param name="gainP" type="double" value="1" />
+        <param name="gainI" type="double" value="1" />
+        <param name="gainD" type="double" value="1" />
+        <param name="max_whl_turns" type="double" value="1.85" />
+        <param name="max_str_params" type="double" value="100" />
+    </node>
+
+    <node name="steering_param_to_steering_voltage" pkg="vugc1_control" type="str_prm_to_str_vlt.py" />
+
+</launch>

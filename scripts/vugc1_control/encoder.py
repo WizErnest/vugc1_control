@@ -1,0 +1,27 @@
+#!/usr/bin/env python
+
+
+class SteeringEncoder(object):
+    def __init__(self, cpr=100, res=4, count=0, turns=0, ccw=True):
+        # cycles per revolution
+        self.cpr = cpr
+        # resoltuion either 1x, 2x, 4x
+        self.res = res
+
+        # number of pulses in either direction
+        # postive if ccw, negative if cw
+        self.count = count
+        # number of turns in one direction
+        self.turns = turns
+        # is moving in counterclockwise direction, (RHS)
+        self.ccw = ccw
+
+    def reset_encoder(self):
+        self.count = 0
+        self.turns = 0
+        self.ccw = True
+
+    def update(self, count, turns, ccw):
+        self.count = count
+        self.turns = turns
+        self.ccw = ccw

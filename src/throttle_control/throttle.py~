@@ -1,0 +1,64 @@
+import rospy
+import pid
+import time
+
+from sensor_msgs.msg import Imu
+from geometry_msgs.msg import Vector3
+from vugc1_control.msg import drive_param
+from vugc1_control.msg import steering_param
+
+control_steering_parameters = rospy.Publisher('vugc1_control_steering_parameters', steering_param, queue_size=10)
+
+max_str_whl_turns = 1.85
+max_str_param = 100
+
+steering_pid = pid.PIDcontroller(limited=True, ub=max_str_param, lb=-1*max_str_param)
+
+set_spd = 0
+cur_spd = 0
+
+old_time = time.time()
+new_time = time.time()
+
+
+def offhook():
+    pass
+
+
+def correct_steering():
+    dt = new_time - old_time
+    steering_pid.update(set_spd, cur_spd, dt)
+
+    difference = steering_pid.correction
+
+    parameters = steering_param()
+    parameters.value = difference
+    control_steering_parameters.publish(parameters)
+
+
+def check_imu(val):
+    rospy.on_shutdown(offhook)
+
+    global new_time, old_time, cur_pos
+
+    old_time = new_time
+    new_time = time.time()
+
+    accel = val.lin
+    vel = Vector3()
+    vel.x = Imu.linear_acceleration
+
+
+def set_setpoint(val):
+    global set_spd
+    rospy.on_shutdown(offhook)
+    set_spd = val.velocity
+
+
+if __name__ == '__main__':
+    print ("Steering control started")
+    rospy.init_node('steering_control', anonymous=True)
+    rospy.Subscriber('imu', Imu, check_imu)
+    rospy.Subscriber('control_drive_parameters', drive_param, set_setpoint)
+    correct_steering()
+    rospy.spin()
